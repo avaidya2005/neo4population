@@ -6,13 +6,13 @@ import logging
 logging.basicConfig(level=logging.INFO)
 
 # Define the URI and credentials for your Neo4j database
-""" uri = "neo4j://localhost:7687"
-username = "neo4j"
-password = "neo4j123" """
-
-uri = "neo4j://172.104.129.10:7687"  # Default URI for Neo4j
+uri = "neo4j://localhost:7687"
 username = "neo4j"
 password = "neo4j123"
+
+""" uri = "neo4j://172.104.129.10:7687"
+username = "neo4j"
+password = "neo4j123" """
 
 
 # Create a Neo4j driver instance
@@ -29,8 +29,8 @@ def run_query(query, parameters=None):
         return None
 
 # Read the CSV file into a DataFrame
-#csv_file_path = 'C:/Development/workspace/kg-creations/data.csv'  # Update with your actual file path
-csv_file_path = '/home/dhani/form-factory/kg/scripts/data.csv'  # Update with your actual file path
+csv_file_path = 'C:/Development/workspace/kg-creations/datafiles/data_original.csv'  # Update with your actual file path
+#csv_file_path = '/home/dhani/form-factory/kg/scripts/data.csv'  # Update with your actual file path
 
 df = pd.read_csv(csv_file_path)
 

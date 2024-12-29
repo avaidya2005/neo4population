@@ -40,7 +40,7 @@ def run_query(query, parameters=None):
 
 # Read the CSV file into a DataFrame
 # Read the CSV file into a DataFrame
-csv_file_path = 'C:/Development/workspace/kg-creations/data.csv'  # Update with your actual file path
+csv_file_path = 'C:/Development/workspace/kg-creations/datafiles/data_original.csv'  # Update with your actual file path
 df = pd.read_csv(csv_file_path)
 
 # Replace NaN values with a default value (e.g., empty string)
@@ -313,7 +313,7 @@ def execute_batch_queries(batch_queries):
                 tx.run(q['query'], q['parameters'])
 
 # Execute batched queries in transactions
-""" execute_batch_queries(date_queries)
+execute_batch_queries(date_queries)
 execute_batch_queries(operated_on_queries)
 execute_batch_queries(shift_queries)
 execute_batch_queries(used_on_operated_during_queries)
@@ -323,10 +323,10 @@ execute_batch_queries(supplier_queries)
 execute_batch_queries(defect_queries)
 execute_batch_queries(product_date_relationships)
 execute_batch_queries(product_supplier_relationships)
-execute_batch_queries(machine_defect_date_relationships) """
+execute_batch_queries(machine_defect_date_relationships)
 
 # Execute batched queries in transactions
-execute_batch_queries(team_queries)
+#execute_batch_queries(team_queries)
 
 
 

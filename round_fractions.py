@@ -18,6 +18,9 @@ df[columns_to_round] = df[columns_to_round].round(2)
 
 df['Operator Experience (years)'] = df['Operator Experience (years)'].round()
 
+# Replace 'Factory ' with an empty string in the 'Factory' column to retain only numeric values 
+df['Factory'] = df['Factory'].str.replace('Factory ', '').astype(int)
+
 # Save the modified DataFrame back to a CSV file
 df.to_csv('datafiles/data_rounded.csv', index=False)
 

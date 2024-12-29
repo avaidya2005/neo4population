@@ -1,0 +1,217 @@
+import pandas as pd
+from neo4j import GraphDatabase
+import logging
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+
+# Define the URI and credentials for your Neo4j database
+uri = "neo4j://localhost:7687"
+username = "neo4j"
+password = "neo4j123"
+
+
+""" 
+uri = "neo4j://172.104.129.10:7687"  # Default URI for Neo4j
+username = "neo4j"
+password = "neo4j123"
+ """
+# Create a Neo4j driver instance
+driver = GraphDatabase.driver(uri, auth=(username, password))
+
+
+
+# Function to execute batched queries
+def execute_batch_queries(batch_queries):
+    with driver.session() as session:
+        with session.begin_transaction() as tx:
+            for q in batch_queries:
+                tx.run(q['query'], q['parameters'])
+
+
+# Read the CSV file into a DataFrame
+csv_file_path = 'C:/Development/workspace/kg-creations/datafiles/data_rounded.csv'  # Update with your actual file path
+#csv_file_path = '/home/dhani/form-factory/kg/scripts/data.csv'  # Update with your actual file path
+
+df = pd.read_csv(csv_file_path)
+
+# Replace NaN values with a default value (e.g., empty string)
+df = df.fillna('')
+
+# Check DataFrame info
+print(df.info())
+print(df.head())
+
+df['unique_factory_id'] = df['Factory']
+df['Date'] = pd.to_datetime(df['Date']).dt.strftime('%Y-%m-%d')  # Convert date to the correct format
+
+factory_queries = []
+for index, row in df.iterrows():
+    factory_queries.append({
+        'query': """
+            MERGE (f:Factory {factory_id: $factory, location: $location})
+        """,
+        'parameters': {
+            'factory': row['unique_factory_id'],
+            'location': row['Location']
+        }
+    })
+
+factory_queries = []
+for index, row in df.iterrows():
+    factory_queries.append({
+        'query': """
+            MERGE (f:Factory {factory_id: $factory, location: $location})
+        """,
+        'parameters': {
+            'factory': row['unique_factory_id'],
+            'location': row['Location']
+        }
+    })
+
+# Create Machine nodes and establish PART_OF relationships
+machine_queries = []
+for index, row in df.iterrows():
+    machine_queries.append({
+        'query': """
+            MATCH (f:Factory {factory_id: $factory, location: $location})
+            MERGE (m:Machine {machine_id: $unique_machine_id, type: $machine_type})
+            MERGE (m)-[:PART_OF]->(f)
+        """,
+        'parameters': {
+            'unique_machine_id': row['Location'] + '_' + str(row['unique_factory_id']) + '_' + row['Machine Type'],
+            'factory': row['unique_factory_id'],
+            'machine_type': row['Machine Type'],
+            'location': row['Location']
+        }
+    })
+
+unique_dates = df['Date'].unique()
+date_queries = []
+for date in unique_dates:
+    date_queries.append({
+        'query': """
+            MERGE (d:Date {date: date($date)})
+        """,
+        'parameters': {
+            'date': date
+        }
+    })
+
+# Create Product nodes
+product_queries = []
+for index, row in df.iterrows():
+    product_queries.append({
+        'query': """
+            MERGE (p:Product {product_category: $product_category})
+        """,
+        'parameters': {
+            'product_category': row['Product Category']
+        }
+    })
+
+# Create Supplier nodes
+supplier_queries = []
+for index, row in df.iterrows():
+    supplier_queries.append({
+        'query': """
+            MERGE (s:Supplier {supplier_name: $supplier_name})
+        """,
+        'parameters': {
+            'supplier_name': row['Supplier']
+        }
+    })
+
+# Create Defect nodes
+defect_queries = []
+for index, row in df.iterrows():
+    defect_queries.append({
+        'query': """
+            MERGE (d:Defect {defect_root_cause: $defect_root_cause})
+        """,
+        'parameters': {
+            'defect_root_cause': row['Defect Root Cause']
+        }
+    })
+
+# Create Shift nodes
+unique_shifts = df['Shift'].unique()
+shift_queries = []
+for shift in unique_shifts:
+    shift_queries.append({
+        'query': """
+            MERGE (s:Shift {shift: $shift})
+        """,
+        'parameters': {
+            'shift': shift
+        }
+    })
+
+execute_batch_queries(factory_queries)
+execute_batch_queries(machine_queries)
+execute_batch_queries(date_queries)
+execute_batch_queries(product_queries)
+execute_batch_queries(supplier_queries)
+execute_batch_queries(defect_queries)
+execute_batch_queries(shift_queries)
+
+# Create OPERATED_ON relationships
+operated_on_queries = []
+for index, row in df.iterrows():
+    operated_on_queries.append({
+        'query': """
+            MATCH (f:Factory {factory_id: $factory, location: $location})
+            MATCH (d:Date {date: date($date)})
+            MERGE (f)-[r:OPERATED_ON {date: $date}]->(d)
+            ON CREATE SET r.production_volume = $production_volume, r.revenue = $revenue, 
+                          r.profit_margin = $profit_margin, r.market_demand_index = $market_demand_index
+            ON MATCH SET r.production_volume = $production_volume, r.revenue = $revenue, 
+                         r.profit_margin = $profit_margin, r.market_demand_index = $market_demand_index
+        """,
+        'parameters': {
+            'factory': row['Factory'],
+            'location': row['Location'],
+            'date': row['Date'],
+            'production_volume': row['Production Volume (units)'],
+            'revenue': row['Revenue ($)'],
+            'profit_margin': row['Profit Margin (%)'],
+            'market_demand_index': row['Market Demand Index']
+        }
+    })
+
+# Create USED_ON and OPERATED_DURING relationships
+used_on_operated_during_queries = []
+for index, row in df.iterrows():
+    used_on_operated_during_queries.append({
+        'query': """
+            MATCH (m:Machine {machine_id: $unique_machine_id})
+            MATCH (d:Date {date: date($date)})
+            MATCH (s:Shift {shift: $shift})
+            MERGE (m)-[r:USED_ON {machine_utilization: $machine_utilization, machine_downtime: $machine_downtime, cycle_time: $cycle_time, 
+                energy_consumption: $energy_consumption, co2_emissions: $co2_emissions, emission_limit_compliance: $emission_limit_compliance, 
+                cost_of_downtime: $cost_of_downtime, breakdowns: $breakdowns, safety_incidents: $safety_incidents, defect_rate: $defect_rate}]->(d)
+            MERGE (m)-[:OPERATED_DURING]->(s)
+        """,
+        'parameters': {
+            'unique_machine_id': row['Location'] + '_' + str(row['unique_factory_id']) + '_' + row['Machine Type'],
+            'date': row['Date'],
+            'shift': row['Shift'],
+            'machine_utilization': row['Machine Utilization (%)'],
+            'machine_downtime': row['Machine Downtime (hours)'],
+            'cycle_time': row['Cycle Time (minutes)'],
+            'energy_consumption': row['Energy Consumption (kWh)'],
+            'co2_emissions': row['CO2 Emissions (kg)'],
+            'emission_limit_compliance': row['Emission Limit Compliance'],
+            'cost_of_downtime': row['Cost of Downtime ($)'],
+            'breakdowns': row['Breakdowns (count)'],
+            'safety_incidents': row['Safety Incidents (count)'],
+            'defect_rate': row['Defect Rate (%)']
+        }
+    })
+
+
+#execute_batch_queries(operated_on_queries)
+execute_batch_queries(used_on_operated_during_queries)
+
+# Close the driver connection
+driver.close()
