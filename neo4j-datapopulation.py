@@ -283,7 +283,7 @@ for index, row in df.iterrows():
             MERGE (t)-[:WORKS_ON {date: date($date)}]->(m)
         """,
         'parameters': {
-            'unique_team_id': df['Location'] + '_' +  str(row['unique_factory_id']) +  '_' + df['Machine Type'],
+            'unique_team_id': row['Location'] + '_' +   str(row['Factory']) +  '_' + row['Machine Type'],
             'factory': row['Factory'],
             'location': row['Location'],
             'machine_type': row['Machine Type'],
