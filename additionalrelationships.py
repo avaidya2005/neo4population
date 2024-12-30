@@ -245,12 +245,13 @@ for index, row in df.iterrows():
         'query': """
             MATCH (p:Product {product_category: $product_category})
             MATCH (d:Date {date: date($date)})
-            MERGE (p)-[:PRODUCED_ON {batch_quality: $batch_quality}]->(d)
+            MERGE (p)-[:PRODUCED_ON {batch_quality: $batch_quality, machine_id: $machine_id}]->(d)
         """,
         'parameters': {
             'product_category': row['Product Category'],
             'date': row['Date'],
-            'batch_quality': row['Batch Quality (Pass %)']
+            'batch_quality': row['Batch Quality (Pass %)'],
+            'machine_id': row['unique_machine_id']
         }
     })
     product_supplier_relationships.append({
