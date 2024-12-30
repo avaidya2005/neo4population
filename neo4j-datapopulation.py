@@ -30,7 +30,7 @@ def execute_batch_queries(batch_queries):
 
 
 # Read the CSV file into a DataFrame
-csv_file_path = 'C:/Development/workspace/kg-creations/datafiles/data_rounded.csv'  # Update with your actual file path
+csv_file_path = 'datafiles/data_rounded.csv'  # Update with your actual file path
 #csv_file_path = '/home/dhani/form-factory/kg/scripts/data.csv'  # Update with your actual file path
 
 df = pd.read_csv(csv_file_path)
@@ -45,15 +45,14 @@ print(df.head())
 df['unique_factory_id'] = df['Factory']
 df['Date'] = pd.to_datetime(df['Date']).dt.strftime('%Y-%m-%d')  # Convert date to the correct format
 
-factory_queries = []
+city_queries = []
 for index, row in df.iterrows():
-    factory_queries.append({
+    city_queries.append({
         'query': """
-            MERGE (f:Factory {factory_id: $factory, location: $location})
+            MERGE (c:Location {location: $location})
         """,
         'parameters': {
-            'factory': row['unique_factory_id'],
-            'location': row['Location']
+            'location': row['Location'],
         }
     })
 
@@ -61,28 +60,43 @@ factory_queries = []
 for index, row in df.iterrows():
     factory_queries.append({
         'query': """
-            MERGE (f:Factory {factory_id: $factory, location: $location})
+            MERGE (f:Factory {factory_id: $factory})
         """,
         'parameters': {
             'factory': row['unique_factory_id'],
-            'location': row['Location']
         }
     })
+
+# Create LOCATED_IN relationships
+
+located_in_queries = []
+for index, row in df.iterrows():
+    located_in_queries.append({
+        'query': """
+            MATCH (f:Factory {factory_id: $factory})
+            MATCH (l:Location {location_id: $location_id})
+
+            MERGE (f)-[:LOCATED_IN]->(c)
+        """,
+        'parameters': {
+             'factory': row['unique_factory_id'],
+             'location_id': row['Location']
+        }
+    })
+
 
 # Create Machine nodes and establish PART_OF relationships
 machine_queries = []
 for index, row in df.iterrows():
     machine_queries.append({
         'query': """
-            MATCH (f:Factory {factory_id: $factory, location: $location})
-            MERGE (m:Machine {machine_id: $unique_machine_id, type: $machine_type})
+            MATCH (f:Factory {factory_id: $factory})
+            MERGE (m:Machine {machine_id: $machine_type})
             MERGE (m)-[:PART_OF]->(f)
         """,
         'parameters': {
-            'unique_machine_id': row['Location'] + '_' + str(row['unique_factory_id']) + '_' + row['Machine Type'],
             'factory': row['unique_factory_id'],
             'machine_type': row['Machine Type'],
-            'location': row['Location']
         }
     })
 
@@ -154,10 +168,10 @@ operated_on_queries = []
 for index, row in df.iterrows():
     operated_on_queries.append({
         'query': """
-            MATCH (f:Factory {factory_id: $factory, location: $location})
+            MATCH (f:Factory {factory_id: $factory})
             MATCH (d:Date {date: date($date)})
             MATCH (s:Shift {shift: $shift})
-            MERGE (f)-[r:OPERATED_ON {date: $date, shift: $shift}]->(d)
+            MERGE (f)-[r:OPERATED_ON {location: $location, date: $date, shift: $shift}]->(d)
             ON CREATE SET r.production_volume = $production_volume, r.revenue = $revenue, 
                           r.profit_margin = $profit_margin, r.market_demand_index = $market_demand_index
             ON MATCH SET r.production_volume = $production_volume, r.revenue = $revenue, 
@@ -175,22 +189,24 @@ for index, row in df.iterrows():
         }
     })
 
-# Create USED_ON and OPERATED_DURING relationships
-used_on_operated_during_queries = []
+# Create USED_ON relationships
+used_on_queries = []
 for index, row in df.iterrows():
-    used_on_operated_during_queries.append({
+    used_on_queries.append({
         'query': """
             MATCH (m:Machine {machine_id: $unique_machine_id})
             MATCH (d:Date {date: date($date)})
             MATCH (s:Shift {shift: $shift})
-            MERGE (m)-[r:USED_ON {machine_utilization: $machine_utilization, machine_downtime: $machine_downtime, cycle_time: $cycle_time, 
+            MERGE (m)-[r:USED_ON {location: $location, factory: $factory, machine_utilization: $machine_utilization, machine_downtime: $machine_downtime, cycle_time: $cycle_time, 
                 energy_consumption: $energy_consumption, co2_emissions: $co2_emissions, emission_limit_compliance: $emission_limit_compliance, 
                 cost_of_downtime: $cost_of_downtime, breakdowns: $breakdowns, safety_incidents: $safety_incidents, defect_rate: $defect_rate}]->(d)
         """,
         'parameters': {
-            'unique_machine_id': row['Location'] + '_' + str(row['unique_factory_id']) + '_' + row['Machine Type'],
-            'date': row['Date'],
+            'unique_machine_id': row['Machine Type'],
+            'date': row['Date'], 
             'shift': row['Shift'],
+            'factory': row['Factory'],
+            'location': row['Location'],
             'machine_utilization': row['Machine Utilization (%)'],
             'machine_downtime': row['Machine Downtime (hours)'],
             'cycle_time': row['Cycle Time (minutes)'],
@@ -214,26 +230,31 @@ for index, row in df.iterrows():
         'query': """
             MATCH (p:Product {product_category: $product_category})
             MATCH (d:Date {date: date($date)})
-            MERGE (p)-[:PRODUCED_ON {batch_quality: $batch_quality, machine_id: $machine_id}]->(d)
+            MERGE (p)-[:PRODUCED_ON {batch_quality: $batch_quality, location: $location, factory: $factory, machine_id: $unique_machine_id}]->(d)
         """,
         'parameters': {
             'product_category': row['Product Category'],
             'date': row['Date'],
             'batch_quality': row['Batch Quality (Pass %)'],
-            'machine_id': row['Location'] + '_' + str(row['Factory']) + '_' + row['Machine Type']
+            'factory': row['Factory'],
+            'location': row['Location'],
+            'unique_machine_id': row['Machine Type'],
         }
     })
     product_supplier_relationships.append({
         'query': """
             MATCH (p:Product {product_category: $product_category})
             MATCH (sup:Supplier {supplier_name: $supplier_name})
-            MERGE (p)-[:SUPPLIED_BY {supplier_delays: $supplier_delays, raw_material_quality: $raw_material_quality}]->(sup)
+            MERGE (p)-[:SUPPLIED_BY {supplier_delays: $supplier_delays, raw_material_quality: $raw_material_quality, location: $location, factory: $factory, machine_id: $unique_machine_id}]->(sup)
         """,
         'parameters': {
             'product_category': row['Product Category'],
             'supplier_name': row['Supplier'],
             'supplier_delays': row['Supplier Delays (days)'],
-            'raw_material_quality': row['Raw Material Quality']
+            'raw_material_quality': row['Raw Material Quality'],
+            'factory': row['Factory'],
+            'location': row['Location'],
+            'unique_machine_id': row['Machine Type'],
         }
     })
     machine_defect_date_relationships.append({
@@ -241,18 +262,16 @@ for index, row in df.iterrows():
             MATCH (m:Machine {machine_id: $machine_id})
             MATCH (def:Defect {defect_root_cause: $defect_root_cause})
             MATCH (d:Date {date: date($date)})
-            MERGE (m)-[:EXPERIENCED_DEFECT]->(def)-[:ON]->(d)
+            MERGE (m)-[:EXPERIENCED_DEFECT {location: $location, factory: $factory, machine_id: $machine_id, date: date($date)}]->(def)-[:ON]->(d)
         """,
         'parameters': {
-            'machine_id': row['Location'] + '_' + str(row['unique_factory_id']) + '_' + row['Machine Type'],
+            'machine_id': row['Machine Type'],
+            'factory': row['Factory'],
+            'location': row['Location'],            
             'defect_root_cause': row['Defect Root Cause'],
             'date': row['Date']
         }
     })
-df['unique_team_id'] = df['Location'] + '_' +  str(row['unique_factory_id']) +  '_' + df['Machine Type']
-
-# Create Team nodes and relationships
-
 # Create Team nodes and relationships
 team_queries = []
 
@@ -260,28 +279,30 @@ for index, row in df.iterrows():
     team_queries.append({
         'query': """
             MERGE (t:Team {team_id: $unique_team_id, factory: $factory, location: $location, machine_type: $machine_type})
-            MERGE (m:Machine {machine_id: $unique_machine_id})
-            MERGE (t)-[:OPERATES {date: date($date)}]->(m)
+            MERGE (m:Machine {machine_id: $machine_type})
+            MERGE (t)-[:WORKS_ON {date: date($date)}]->(m)
         """,
         'parameters': {
-            'unique_team_id': row['unique_team_id'],
+            'unique_team_id': df['Location'] + '_' +  str(row['unique_factory_id']) +  '_' + df['Machine Type'],
             'factory': row['Factory'],
             'location': row['Location'],
             'machine_type': row['Machine Type'],
-            'unique_machine_id': row['Location'] + '_' + str(row['Factory']) + '_' + row['Machine Type'],
             'date': row['Date'] # Assuming 'Production Volume (units)' is the column name
         }
     })
-#execute_batch_queries(operated_on_queries)
+
+execute_batch_queries(city_queries)
 execute_batch_queries(factory_queries)
+execute_batch_queries(located_in_queries)
+
 execute_batch_queries(machine_queries)
 execute_batch_queries(date_queries)
 execute_batch_queries(product_queries)
 execute_batch_queries(supplier_queries)
 execute_batch_queries(defect_queries)
 execute_batch_queries(shift_queries)
-execute_batch_queries(operated_on_queries)
-execute_batch_queries(used_on_operated_during_queries)
+execute_batch_queries(operated_on_queries) 
+execute_batch_queries(used_on_queries)
 
 
 execute_batch_queries(product_date_relationships)
