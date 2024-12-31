@@ -6,16 +6,16 @@ import logging
 logging.basicConfig(level=logging.INFO)
 
 # Define the URI and credentials for your Neo4j database
-uri = "neo4j://localhost:7687"
-username = "neo4j"
-password = "neo4j123"
+#uri = "neo4j://localhost:7687"
+#username = "neo4j"
+#password = "neo4j123"
 
 
-""" 
+
 uri = "neo4j://172.104.129.10:7687"  # Default URI for Neo4j
 username = "neo4j"
 password = "neo4j123"
- """
+
 # Create a Neo4j driver instance
 driver = GraphDatabase.driver(uri, auth=(username, password))
 
@@ -74,13 +74,13 @@ for index, row in df.iterrows():
     located_in_queries.append({
         'query': """
             MATCH (f:Factory {factory_id: $factory})
-            MATCH (l:Location {location_id: $location_id})
+            MATCH (l:Location {location: $location})
 
-            MERGE (f)-[:LOCATED_IN]->(c)
+            MERGE (f)-[:LOCATED_IN]->(l)
         """,
         'parameters': {
              'factory': row['unique_factory_id'],
-             'location_id': row['Location']
+             'location': row['Location']
         }
     })
 
@@ -290,9 +290,10 @@ for index, row in df.iterrows():
             'date': row['Date'] # Assuming 'Production Volume (units)' is the column name
         }
     })
-
+ 
 execute_batch_queries(city_queries)
 execute_batch_queries(factory_queries)
+
 execute_batch_queries(located_in_queries)
 
 execute_batch_queries(machine_queries)
