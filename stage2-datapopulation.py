@@ -40,8 +40,8 @@ df = df.fillna('')
 
 
 df['Date'] = pd.to_datetime(df['Date']).dt.strftime('%Y-%m-%d')  # Convert date to the correct format
-df['unique_machine_id'] = df['Location'] + '_' + df['Factory'].astype(str) + '_' + df['Machine Type']  # Create a unique machine ID
-df['operator_id'] = df['Location'] + '_' + df['Factory'].astype(str) + '_' + df['Operator Experience (years)'].astype(str)  # Create a unique operator ID
+df['unique_machine_id'] = df['Location'] + '-' + df['Factory'].astype(str) + '-' + df['Machine Type']  # Create a unique machine ID
+df['operator_id'] = df['Location'] + '-' + df['Factory'].astype(str) + '-' + df['Operator Experience (years)'].astype(str)  # Create a unique operator ID
 print(df.info())
 
 unique_dates = df['Date'].unique()
@@ -225,7 +225,7 @@ for index, row in df.iterrows():
             MERGE (t)-[:WORKS_ON {date: date($date)}]->(m)
         """,
         'parameters': {
-            'unique_team_id': row['Location'] + '_' +   str(row['Factory']) +  '_' + row['Machine Type'],
+            'unique_team_id': row['Location'] + '-' +   str(row['Factory']) +  '-' + row['Machine Type'],
             'factory': row['Factory'],
             'location': row['Location'],
             'machine_type': row['Machine Type'],
@@ -233,31 +233,16 @@ for index, row in df.iterrows():
         }
     })
 
-execute_batch_queries(machine_queries)
 
-""" execute_batch_queries(date_queries)
+execute_batch_queries(date_queries)
 execute_batch_queries(factory_queries)
+execute_batch_queries(machine_queries)
 execute_batch_queries(operated_on_queries) 
 execute_batch_queries(used_on_queries)
 execute_batch_queries(operated_queries) 
 execute_batch_queries(product_date_relationships)
 execute_batch_queries(product_supplier_relationships)
 execute_batch_queries(machine_defect_date_relationships)
- """
-
-""" execute_batch_queries(city_queries)
-
-execute_batch_queries(located_in_queries)
-
-execute_batch_queries(product_queries)
-execute_batch_queries(supplier_queries)
-execute_batch_queries(defect_queries)
-execute_batch_queries(shift_queries)
-
-
-execute_batch_queries(team_queries) 
-
-"""
 
 # Close the driver connection
 driver.close()
