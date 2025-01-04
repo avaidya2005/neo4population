@@ -40,8 +40,8 @@ df = df.fillna('')
 
 
 df['Date'] = pd.to_datetime(df['Date']).dt.strftime('%Y-%m-%d')  # Convert date to the correct format
-df['unique_machine_id'] = df['Location'] + '-' + df['Factory'].astype(str) + '-' + df['Machine Type']  # Create a unique machine ID
-df['operator_id'] = df['Location'] + '-' + df['Factory'].astype(str) + '-' + df['Operator Experience (years)'].astype(str)  # Create a unique operator ID
+df['unique_machine_id'] = 'Machine-'+ df['Location'] + '-' + df['Factory'].astype(str) + '-' + df['Machine Type']  # Create a unique machine ID
+df['operator_id'] = 'Operator-' + df['Location'] + '-' + df['Factory'].astype(str) + '-' + df['Operator Experience (years)'].astype(str)  # Create a unique operator ID
 print(df.info())
 
 unique_dates = df['Date'].unique()
@@ -67,6 +67,8 @@ for index, row in df.iterrows():
             MERGE (:Product {product_category: $product_category})
             MERGE (:Supplier {supplier_name: $supplier_name})
             MERGE (:Defect {defect_root_cause: $defect_root_cause})
+            MERGE (:RawMaterial {raw_material_quality: $raw_material_quality})
+
 
         """,
         'parameters': {
@@ -80,7 +82,8 @@ for index, row in df.iterrows():
             'operator_training_level': row['Operator Training Level'],
             'product_category': row['Product Category'],
             'supplier_name': row['Supplier'],
-            'defect_root_cause': row['Defect Root Cause']
+            'defect_root_cause': row['Defect Root Cause'],
+            'raw_material_quality': row['Raw Material Quality']
         }
     })
 
@@ -172,7 +175,8 @@ for index, row in df.iterrows():
 
 # Create relationships as specified
 product_date_relationships = []
-product_supplier_relationships = []
+product_raw_material_date_relationships = []
+raw_material_supplier_relationships = []
 machine_defect_date_relationships = []
 
 for index, row in df.iterrows():
@@ -188,19 +192,38 @@ for index, row in df.iterrows():
             'batch_quality': row['Batch Quality (Pass %)']
         }
     })
-    product_supplier_relationships.append({
+
+for index, row in df.iterrows():
+    raw_material_supplier_relationships.append({
         'query': """
-            MATCH (p:Product {product_category: $product_category})
+            MATCH (r:RawMaterial {raw_material_quality: $raw_material_quality})
             MATCH (sup:Supplier {supplier_name: $supplier_name})
-            MERGE (p)-[:SUPPLIED_BY {supplier_delays: $supplier_delays, raw_material_quality: $raw_material_quality}]->(sup)
+            MATCH (d:Date {date: date($date)})
+            MERGE (r)-[:SUPPLIED_BY {supplier_delays: $supplier_delays}]->(sup)-[:ON]->(d)
         """,
         'parameters': {
-            'product_category': row['Product Category'],
+            'raw_material_quality': row['Raw Material Quality'],
             'supplier_name': row['Supplier'],
             'supplier_delays': row['Supplier Delays (days)'],
-            'raw_material_quality': row['Raw Material Quality']
+            'date': row['Date']
         }
     })
+
+for index, row in df.iterrows():
+    product_raw_material_date_relationships.append({
+        'query': """
+            MATCH (p:Product {product_category: $product_category})
+            MATCH (r:RawMaterial {raw_material_quality: $raw_material_quality})
+            MATCH (d:Date {date: date($date)})
+            MERGE (p)-[:PRODUCED_USING ]->(r)-[:ON]->(d)
+        """,
+        'parameters': {
+            'raw_material_quality': row['Raw Material Quality'],
+            'product_category': row['Product Category'],
+            'date': row['Date']
+        }
+    })
+
     machine_defect_date_relationships.append({
         'query': """
             MATCH (m:Machine {machine_id: $machine_id})
@@ -241,7 +264,8 @@ execute_batch_queries(operated_on_queries)
 execute_batch_queries(used_on_queries)
 execute_batch_queries(operated_queries) 
 execute_batch_queries(product_date_relationships)
-execute_batch_queries(product_supplier_relationships)
+execute_batch_queries(raw_material_supplier_relationships)
+execute_batch_queries(product_raw_material_date_relationships)
 execute_batch_queries(machine_defect_date_relationships)
 
 # Close the driver connection
