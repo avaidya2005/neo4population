@@ -40,7 +40,7 @@ def run_query(query, parameters=None):
 
 # Read the CSV file into a DataFrame
 # Read the CSV file into a DataFrame
-csv_file_path = 'C:/Development/workspace/kg-creations/data.csv'  # Update with your actual file path
+csv_file_path = 'C:/Development/workspace/kg-creations/datafiles/data_original.csv'  # Update with your actual file path
 df = pd.read_csv(csv_file_path)
 
 # Replace NaN values with a default value (e.g., empty string)
@@ -245,12 +245,13 @@ for index, row in df.iterrows():
         'query': """
             MATCH (p:Product {product_category: $product_category})
             MATCH (d:Date {date: date($date)})
-            MERGE (p)-[:PRODUCED_ON {batch_quality: $batch_quality}]->(d)
+            MERGE (p)-[:PRODUCED_ON {batch_quality: $batch_quality, machine_id: $machine_id}]->(d)
         """,
         'parameters': {
             'product_category': row['Product Category'],
             'date': row['Date'],
-            'batch_quality': row['Batch Quality (Pass %)']
+            'batch_quality': row['Batch Quality (Pass %)'],
+            'machine_id': row['unique_machine_id']
         }
     })
     product_supplier_relationships.append({
@@ -313,7 +314,7 @@ def execute_batch_queries(batch_queries):
                 tx.run(q['query'], q['parameters'])
 
 # Execute batched queries in transactions
-""" execute_batch_queries(date_queries)
+execute_batch_queries(date_queries)
 execute_batch_queries(operated_on_queries)
 execute_batch_queries(shift_queries)
 execute_batch_queries(used_on_operated_during_queries)
@@ -323,10 +324,10 @@ execute_batch_queries(supplier_queries)
 execute_batch_queries(defect_queries)
 execute_batch_queries(product_date_relationships)
 execute_batch_queries(product_supplier_relationships)
-execute_batch_queries(machine_defect_date_relationships) """
+execute_batch_queries(machine_defect_date_relationships)
 
 # Execute batched queries in transactions
-execute_batch_queries(team_queries)
+#execute_batch_queries(team_queries)
 
 
 
