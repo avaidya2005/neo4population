@@ -40,7 +40,7 @@ df = df.fillna('')
 
 
 df['Date'] = pd.to_datetime(df['Date']).dt.strftime('%Y-%m-%d')  # Convert date to the correct format
-df['unique_machine_id'] = 'Machine-'+ df['Location'] + '-' + df['Factory'].astype(str) + '-' + df['Machine Type']  # Create a unique machine ID
+df['unique_machine_id'] = df['Location'] + '-' + df['Factory'].astype(str) + '-' + df['Machine Type']  # Create a unique machine ID
 df['operator_id'] = 'Operator-' + df['Location'] + '-' + df['Factory'].astype(str) + '-' + df['Operator Experience (years)'].astype(str)  # Create a unique operator ID
 print(df.info())
 
@@ -163,8 +163,7 @@ for index, row in df.iterrows():
         'query': """
             MATCH (o:Operator {operator_id: $operator_id})
             MATCH (m:Machine {machine_id: $unique_machine_id})
-            MATCH (d:Date {date: date($date)})
-            CREATE (o)-[:OPERATED]->(m)-[:ON]->(d)
+            MERGE (o)-[:OPERATED{date: date($date)}]->(m)
         """,
         'parameters': {
             'unique_machine_id': row['unique_machine_id'],
@@ -228,8 +227,8 @@ for index, row in df.iterrows():
         'query': """
             MATCH (m:Machine {machine_id: $machine_id})
             MATCH (def:Defect {defect_root_cause: $defect_root_cause})
-            MATCH (d:Date {date: date($date)})
-            MERGE (m)-[:EXPERIENCED_DEFECT]->(def)-[:ON]->(d)
+            WHERE def.defect_root_cause IS NOT NULL AND def.defect_root_cause <> ''
+            MERGE (m)-[:EXPERIENCED_DEFECT{date: date($date)}]->(def)
         """,
         'parameters': {
             'machine_id': row['unique_machine_id'],
@@ -237,25 +236,6 @@ for index, row in df.iterrows():
             'date': row['Date']
         }
     })
-# Create Team nodes and relationships
-team_queries = []
-
-for index, row in df.iterrows():
-    team_queries.append({
-        'query': """
-            MERGE (t:Team {team_id: $unique_team_id, factory: $factory, location: $location, machine_type: $machine_type})
-            MERGE (m:Machine {machine_id: $machine_type})
-            MERGE (t)-[:WORKS_ON {date: date($date)}]->(m)
-        """,
-        'parameters': {
-            'unique_team_id': row['Location'] + '-' +   str(row['Factory']) +  '-' + row['Machine Type'],
-            'factory': row['Factory'],
-            'location': row['Location'],
-            'machine_type': row['Machine Type'],
-            'date': row['Date'] # Assuming 'Production Volume (units)' is the column name
-        }
-    })
-
 
 execute_batch_queries(date_queries)
 execute_batch_queries(factory_queries)
