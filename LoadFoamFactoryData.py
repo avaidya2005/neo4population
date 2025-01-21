@@ -2,6 +2,7 @@ import pandas as pd
 import ast
 from neo4j import GraphDatabase
 import logging
+import json
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -13,6 +14,24 @@ password = "neo4j123"
 
 # Create a Neo4j driver instance
 driver = GraphDatabase.driver(uri, auth=(username, password))
+
+def create_team_id(team_members, factory, location):
+    # Correct potential JSON format issues
+    try:
+        team_members_list = json.loads(team_members.replace("'", '"'))
+    except json.JSONDecodeError as e:
+        print(f"Error decoding JSON: {e}")
+        return None
+    
+    # Get the name of the first member
+    first_member_name = team_members_list[0]['Name']
+    
+    # Extract the segment before the second underscore
+    team_id_segment = first_member_name.split('_')[0] + '_' + first_member_name.split('_')[1]
+    
+    # Create a unique team ID
+    team_id = f"{location}_{factory}_{team_id_segment}"
+    return team_id
 
 # Function to execute batched queries
 def execute_batch_queries(batch_queries):
@@ -84,7 +103,7 @@ for index, row in df.iterrows():
             'location': row['Location']
         }
     })
-execute_batch_queries(team_queries)
+
 
 # Create Member nodes and relationships to Teams
 member_queries = []
@@ -128,7 +147,8 @@ for date in unique_dates:
     })
 
 df['unique_machine_id'] = df['Location'] + '-' + df['Factory'].astype(str) + '-' + df['Machine Type']  # Create a unique machine ID
-
+df['Team Id'] = df.apply(lambda row: create_team_id(row['Team Members'], row['Factory'], row['Location']), axis=1)
+df['Team Id'].to_csv('datafiles/team_ids.csv', index=False)
 node_queries = []
 for index, row in df.iterrows():
     node_queries.append({
@@ -137,6 +157,7 @@ for index, row in df.iterrows():
             MERGE (m:Machine {machine_id: $unique_machine_id, machine_type: $machine_type, machine_age: $machine_age})
             MERGE (:Product {product_category: $product_category})
             MERGE (:Supplier {supplier_name: $supplier_name})
+            MERGE (:RawMaterial {raw_material_quality: $raw_material_quality})
 
         """,
         'parameters': {
@@ -146,7 +167,9 @@ for index, row in df.iterrows():
             'machine_type': row['Machine Type'],
             'machine_age': row['Machine Age (years)'],
             'product_category': row['Product Category'],
-            'supplier_name': row['Supplier']
+            'supplier_name': row['Supplier'],
+            'raw_material_quality': row['Raw Material Quality']
+
         }
     })
 
@@ -173,25 +196,149 @@ for index, row in df.iterrows():
         'query': """
             MATCH (f:Factory {factory_id: $factory, location: $location})
             MATCH (d:Date {date: date($date)})
-            MERGE (f)-[r:OPERATED_ON {production_volume: $production_volume, revenue: $revenue, profit_margin: $profit_margin, market_demand_index: $market_demand_index, shift: $shifts}]->(d)
+            MERGE (f)-[r:OPERATED_ON {shift: $shifts}]->(d)
         """,
         'parameters': {
             'factory': row['Factory'],
             'location': row['Location'],
             'date': row['Date'],
-            'production_volume': row['Production Volume (units)'],
-            'revenue': row['Revenue ($)'],
-            'profit_margin': row['Profit Margin (%)'],
-            'market_demand_index': row['Market Demand Index'],
             'shifts': row['Shift']
         }
     })
 
+# Create USED_ON relationships
+
+used_on_queries = []
+for index, row in df.iterrows():
+    used_on_queries.append({
+        'query': """
+            MATCH (m:Machine {machine_id: $unique_machine_id})
+            MATCH (d:Date {date: date($date)})
+            MERGE (m)-[r:USED_ON {
+                shift: $shifts, machine_utilization: $machine_utilization, cycle_time: $cycle_time, energy_consumption: $energy_consumption, 
+                co2_emissions: $co2_emissions,emission_limit_compliance: $emission_limit_compliance, cost_of_downtime: $cost_of_downtime,
+                breakdowns: $breakdowns, safety_incidents: $safety_incidents, defect_rate: $defect_rate, energy_efficiency_rating: $energy_efficiency_rating, 
+                waste_generated: $waste_generated, water_usage: $water_usage, temperature: $temperature, pressure: $pressure, chemical_ratio: $chemical_ratio,
+                mixing_speed: $mixing_speed, production_volume: $production_volume, revenue: $revenue, profit_margin: $profit_margin, market_demand_index: $market_demand_index
+                }]->(d)
+        """,
+        'parameters': {
+            'unique_machine_id': row['unique_machine_id'],
+            'date': row['Date'],
+            'shifts': row['Shift'],
+            'machine_utilization': row['Machine Utilization (%)'],
+            'cycle_time': row['Cycle Time (minutes)'],
+            'energy_consumption': row['Energy Consumption (kWh)'],
+            'co2_emissions': row['CO2 Emissions (kg)'],
+            'emission_limit_compliance': row['Emission Limit Compliance'],
+            'cost_of_downtime': row['Cost of Downtime ($)'],
+            'breakdowns': row['Breakdowns (count)'],
+            'safety_incidents': row['Safety Incidents (count)'],
+            'defect_rate': row['Defect Rate (%)'],
+            'energy_efficiency_rating': row['Energy Efficiency Rating'],
+            'waste_generated': row['Waste Generated (kg)'],
+            'water_usage': row['Water Usage (liters)'],
+            'temperature': row['Temperature (C)'],
+            'pressure': row['Pressure (psi)'],
+            'chemical_ratio': row['Chemical Ratio'],
+            'mixing_speed': row['Mixing Speed (RPM)'],
+            'production_volume': row['Production Volume (units)'],
+            'revenue': row['Revenue ($)'],
+            'profit_margin': row['Profit Margin (%)'],
+            'market_demand_index': row['Market Demand Index']
+        }
+    })
+    
+# USED_BY_TEAM queries
+used_by_team_queries = []
+for index, row in df.iterrows():
+    used_by_team_queries.append({
+        'query': """
+            MATCH (m:Machine {machine_id: $unique_machine_id})
+            MATCH (t:Team {id: $id})
+            MERGE (t)-[r:USED_BY_TEAM {
+                shift: $shift, 
+                date: date($date), 
+                average_operator_training_level: $average_operator_training_level, 
+                average_absentialism: $average_absentialism, 
+                average_operator_experience: $average_operator_experience}]->(m)
+        """,
+        'parameters': {
+            'unique_machine_id': row['unique_machine_id'],
+            'id': row['Team Id'],
+            'shift': row['Shift'],
+            'date': row['Date'],
+            'average_operator_training_level': row['Operator Training Level'],
+            'average_absentialism': row['Absenteeism Rate (%)'],
+            'average_operator_experience': row['Operator Experience (years)']
+
+        }
+    })
+
+
+product_date_relationships = []
+product_raw_material_date_relationships = []
+raw_material_supplier_relationships = []
+
+for index, row in df.iterrows():
+    product_date_relationships.append({
+        'query': """
+            MATCH (p:Product {product_category: $product_category})
+            MATCH (d:Date {date: date($date)})
+            MERGE (p)-[:PRODUCED_ON {batch: $batch, batch_quality: $batch_quality}]->(d)
+        """,
+        'parameters': {
+            'product_category': row['Product Category'],
+            'date': row['Date'],
+            'batch_quality': row['Batch Quality (Pass %)'],
+            'batch': row['Batch']
+        }
+    })
+
+for index, row in df.iterrows():
+    raw_material_supplier_relationships.append({
+        'query': """
+            MATCH (r:RawMaterial {raw_material_quality: $raw_material_quality})
+            MATCH (sup:Supplier {supplier_name: $supplier_name})
+            MATCH (d:Date {date: date($date)})
+            MERGE (r)-[:SUPPLIED_BY {date: date($date), shift: $shift, supplier_delays: $supplier_delays}]->(sup)
+        """,
+        'parameters': {
+            'raw_material_quality': row['Raw Material Quality'],
+            'supplier_name': row['Supplier'],
+            'supplier_delays': row['Supplier Delays (days)'],
+            'date': row['Date'],
+            'shift': row['Shift']
+        }
+    })
+
+for index, row in df.iterrows():
+    product_raw_material_date_relationships.append({
+        'query': """
+            MATCH (p:Product {product_category: $product_category})
+            MATCH (r:RawMaterial {raw_material_quality: $raw_material_quality})
+            MATCH (d:Date {date: date($date)})
+            MERGE (p)-[:PRODUCED_USING{date: date($date), shift: $shift} ]->(r)
+        """,
+        'parameters': {
+            'raw_material_quality': row['Raw Material Quality'],
+            'product_category': row['Product Category'],
+            'date': row['Date'],
+            'shift': row['Shift']
+        }
+    })
+
+execute_batch_queries(team_queries)
 execute_batch_queries(date_queries)    
 execute_batch_queries(member_queries)
 execute_batch_queries(node_queries)
 execute_batch_queries(machine_queries)
 execute_batch_queries(operated_on_queries)
+execute_batch_queries(used_on_queries)
+execute_batch_queries(used_by_team_queries)
+execute_batch_queries(product_date_relationships)
+execute_batch_queries  (product_raw_material_date_relationships)
+execute_batch_queries(raw_material_supplier_relationships)
 
 
 # Close the driver connection
