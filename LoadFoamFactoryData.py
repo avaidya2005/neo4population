@@ -300,7 +300,6 @@ for index, row in df.iterrows():
         'query': """
             MATCH (r:RawMaterial {raw_material_quality: $raw_material_quality})
             MATCH (sup:Supplier {supplier_name: $supplier_name})
-            MATCH (d:Date {date: date($date)})
             MERGE (r)-[:SUPPLIED_BY {date: date($date), shift: $shift, supplier_delays: $supplier_delays}]->(sup)
         """,
         'parameters': {
@@ -317,17 +316,17 @@ for index, row in df.iterrows():
         'query': """
             MATCH (p:Product {product_category: $product_category})
             MATCH (r:RawMaterial {raw_material_quality: $raw_material_quality})
-            MATCH (d:Date {date: date($date)})
-            MERGE (p)-[:PRODUCED_USING{date: date($date), shift: $shift} ]->(r)
+            MERGE (p)-[:PRODUCED_USING{date: date($date), shift: $shift, batch: $batch, batch_quality: $batch_quality} ]->(r)
         """,
         'parameters': {
             'raw_material_quality': row['Raw Material Quality'],
             'product_category': row['Product Category'],
             'date': row['Date'],
-            'shift': row['Shift']
+            'shift': row['Shift'],
+            'batch_quality': row['Batch Quality (Pass %)'],
+            'batch': row['Batch']
         }
     })
-
 execute_batch_queries(team_queries)
 execute_batch_queries(date_queries)    
 execute_batch_queries(member_queries)
@@ -341,5 +340,6 @@ execute_batch_queries  (product_raw_material_date_relationships)
 execute_batch_queries(raw_material_supplier_relationships)
 
 
+df[['Team Id', 'unique_machine_id', 'Date']].to_csv('datafiles/relationships.csv', index=False)
 # Close the driver connection
 driver.close()
