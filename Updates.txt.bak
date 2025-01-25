@@ -1,0 +1,15 @@
+MATCH (m:Machine)-[:USED_BY_TEAM]->(t:Team)
+MATCH (m)-[u:USED_ON]->(d:Date)
+WHERE d.date >= date('2022-01-01') AND d.date <= date('2022-12-31')
+WITH t, u.production_volume AS ProductionVolume, date(d.date).dayOfWeek AS DayOfWeek
+WITH t, DayOfWeek, avg(ProductionVolume) AS AvgProductionVolume
+RETURN t.id AS TeamID, DayOfWeek, AvgProductionVolume
+ORDER BY t.id, DayOfWeek
+
+Slow Query 
+
+MATCH (p:Product)-[pu:PRODUCED_USING]->(rm:RawMaterial)
+MATCH (rm)-[sb:SUPPLIED_BY]->(s:Supplier)
+WITH s, avg(pu.batch_quality) AS AvgBatchQuality
+RETURN s.supplier_name AS Supplier, AvgBatchQuality
+ORDER BY Supplier

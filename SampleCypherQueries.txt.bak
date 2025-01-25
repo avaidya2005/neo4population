@@ -154,6 +154,7 @@ RETURN m.machine_id AS MachineID, u.defect_rate AS DefectRate, d.date AS Date
 ORDER BY d.date
 
 
+
 Question: Analyze the relationship between supplier raw material quality and batch quality
 MATCH (p:Product)-[pu:PRODUCED_USING]->(rm:RawMaterial)
 RETURN rm.raw_material_quality AS RawMaterialQuality, avg(pu.batch_quality) AS AvgBatchQuality

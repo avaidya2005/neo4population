@@ -256,12 +256,12 @@ for index, row in df.iterrows():
         'query': """
             MATCH (m:Machine {machine_id: $unique_machine_id})
             MATCH (t:Team {id: $id})
-            MERGE (t)-[r:USED_BY_TEAM {
+            MERGE (m)-[r:USED_BY_TEAM {
                 shift: $shift, 
                 date: date($date), 
                 average_operator_training_level: $average_operator_training_level, 
                 average_absentialism: $average_absentialism, 
-                average_operator_experience: $average_operator_experience}]->(m)
+                average_operator_experience: $average_operator_experience}]->(t)
         """,
         'parameters': {
             'unique_machine_id': row['unique_machine_id'],
@@ -338,7 +338,6 @@ execute_batch_queries(used_by_team_queries)
 execute_batch_queries(product_date_relationships)
 execute_batch_queries  (product_raw_material_date_relationships)
 execute_batch_queries(raw_material_supplier_relationships)
-
 
 df[['Team Id', 'unique_machine_id', 'Date']].to_csv('datafiles/relationships.csv', index=False)
 # Close the driver connection
