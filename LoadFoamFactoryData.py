@@ -8,7 +8,7 @@ import json
 logging.basicConfig(level=logging.INFO)
 
 # Define the URI and credentials for your Neo4j database
-uri = "neo4j://localhost:7687"
+uri = "neo4j://172.104.129.10:7787"
 username = "neo4j"
 password = "neo4j123"
 
